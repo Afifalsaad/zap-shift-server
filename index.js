@@ -7,9 +7,9 @@ const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const port = process.env.PORT || 3000;
 const crypto = require("crypto");
 
-var admin = require("firebase-admin");
+const admin = require("firebase-admin");
 
-var serviceAccount = require(process.env.ADMIN_SDK);
+const serviceAccount = require(process.env.ADMIN_SDK);
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
