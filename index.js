@@ -5,12 +5,47 @@ require("dotenv").config();
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 
 const port = process.env.PORT || 3000;
+const crypto = require("crypto");
+
+var admin = require("firebase-admin");
+
+var serviceAccount = require("./zap-shift-5fea2-firebase-adminsdk-fbsvc-2058c83616.json");
+
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+});
+
+function generateTrackingId() {
+  const random = crypto.randomBytes(5).toString("hex").toUpperCase();
+  return `ZAP-${random}`;
+}
 
 const stripe = require("stripe")(process.env.STRIPE_ID);
 
 // middleware
 app.use(express.json());
 app.use(cors());
+
+const verifyFBToken = async (req, res, next) => {
+  // console.log("headers in middleware", req.headers.authorization);
+  const token = req.headers.authorization;
+
+  if (!token) {
+    return res.status(401).send({ message: "unauthorized token" });
+  }
+
+  try {
+    const idToken = token.split(" ")[1];
+    const decode = await admin.auth().verifyIdToken(idToken);
+    console.log("decode from token", decode);
+    req.access_email = decode.email;
+    console.log(req.access_email);
+
+    next();
+  } catch (err) {
+    return res.status(401).send({ message: "forbidden" });
+  }
+};
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.avcddas.mongodb.net/?appName=Cluster0`;
 
@@ -30,6 +65,7 @@ async function run() {
 
     const db = client.db("zap_shift_db");
     const parcelsCollection = db.collection("parcels");
+    const paymentCollection = db.collection("payments");
 
     // parcel APIs
     app.get("/parcels", async (req, res) => {
@@ -92,6 +128,7 @@ async function run() {
         customer_email: parcelInfo.senderEmail,
         metadata: {
           parcelId: parcelInfo.parcelId,
+          parcelName: parcelInfo.parcelName,
         },
         success_url: `${process.env.STRIPE_DOMAIN}/dashboard/payment-success?session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${process.env.STRIPE_DOMAIN}/dashboard/payment-cancelled?session_id={CHECKOUT_SESSION_ID}`,
@@ -102,22 +139,75 @@ async function run() {
 
     app.patch("/payment-success", async (req, res) => {
       const sessionId = req.query.session_id;
-
+      const trackingId = generateTrackingId();
       const session = await stripe.checkout.sessions.retrieve(sessionId);
-      console.log("session", session);
+
+      const transactionId = session.payment_intent;
+      const query = { transactionId: transactionId };
+      const isExist = await paymentCollection.findOne(query);
+      if (isExist) {
+        return res.send({
+          transactionId,
+          message: "already paid",
+          trackingId: isExist.trackingId,
+        });
+      }
+
       if (session.payment_status === "paid") {
         const id = session.metadata.parcelId;
         const query = { _id: new ObjectId(id) };
         const update = {
           $set: {
             payment_status: "paid",
+            trackingId: trackingId,
           },
         };
         const result = await parcelsCollection.updateOne(query, update);
-        res.send(result);
+
+        const payment = {
+          customerEmail: session.customer_email,
+          amount: session.amount_total / 100,
+          currency: session.currency,
+          parcelId: session.metadata.parcelId,
+          parcelName: session.metadata.parcelName,
+          transactionId: session.payment_intent,
+          paymentStatus: session.payment_status,
+          paidAt: new Date(),
+          trackingId: trackingId,
+        };
+
+        if (session.payment_status === "paid") {
+          const paymentResult = await paymentCollection.insertOne(payment);
+          res.send({
+            status: true,
+            modifyParcel: result,
+            trackingId: trackingId,
+            transactionId: session.payment_intent,
+            paymentInfo: paymentResult,
+          });
+        }
+      }
+    });
+
+    app.get("/payments", verifyFBToken, async (req, res) => {
+      const email = req.query.email;
+      console.log("middleware email", req.access_email);
+      console.log("client email", email);
+
+      // console.log("headers", req.headers);
+
+      const query = {};
+      if (email) {
+        query.customerEmail = email;
+
+        if (email !== req.access_email) {
+          return res.status(403).send({ message: "forbidden access" });
+        }
       }
 
-      res.send({ success: false });
+      const cursor = paymentCollection.find(query);
+      const result = await cursor.toArray();
+      res.send(result);
     });
 
     // old
@@ -147,7 +237,6 @@ async function run() {
         cancel_url: `${process.env.STRIPE_DOMAIN}/dashboard/payment-cancelled`,
       });
 
-      console.log(session);
       res.send({ url: session.url });
     });
 
