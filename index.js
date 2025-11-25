@@ -9,7 +9,7 @@ const crypto = require("crypto");
 
 var admin = require("firebase-admin");
 
-var serviceAccount = require("./zap-shift-5fea2-firebase-adminsdk-fbsvc-2058c83616.json");
+var serviceAccount = require(process.env.ADMIN_SDK);
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
