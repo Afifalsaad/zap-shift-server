@@ -27,7 +27,6 @@ app.use(express.json());
 app.use(cors());
 
 const verifyFBToken = async (req, res, next) => {
-  // console.log("headers in middleware", req.headers.authorization);
   const token = req.headers.authorization;
 
   if (!token) {
@@ -64,8 +63,19 @@ async function run() {
     await client.connect();
 
     const db = client.db("zap_shift_db");
+    const userCollection = db.collection("users");
     const parcelsCollection = db.collection("parcels");
     const paymentCollection = db.collection("payments");
+
+    // users related APIs
+    app.post("/users", async (req, res) => {
+      const user = req.body;
+      user.role = "user";
+      user.createdAt = new Date();
+
+      const result = await userCollection.insertOne(user);
+      res.send(result);
+    });
 
     // parcel APIs
     app.get("/parcels", async (req, res) => {
@@ -205,7 +215,7 @@ async function run() {
         }
       }
 
-      const cursor = paymentCollection.find(query);
+      const cursor = paymentCollection.find(query).sort({ paidAt: -1 });
       const result = await cursor.toArray();
       res.send(result);
     });
