@@ -268,6 +268,38 @@ async function run() {
       res.send(result);
     });
 
+    app.patch("/rider-approved/:id", verifyFBToken, async (req, res) => {
+      const status = req.body.status;
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const updatedInfo = {
+        $set: {
+          status: status,
+        },
+      };
+      const result = await ridersCollection.updateOne(query, updatedInfo);
+
+      if (status === "approved") {
+        const email = req.body.email;
+        const query = { email };
+        const updateUser = {
+          $set: {
+            role: "rider",
+          },
+        };
+        const userResult = await userCollection.updateOne(query, updateUser);
+      }
+      res.send(result);
+    });
+
+    app.delete("/riders/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await ridersCollection.deleteOne(query);
+
+      res.send(result);
+    });
+
     app.post("/riders", async (req, res) => {
       const rider = req.body;
       rider.status = "pending";
