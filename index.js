@@ -69,6 +69,25 @@ async function run() {
     const ridersCollection = db.collection("riders");
 
     // users related APIs
+    app.get("/users", async (req, res) => {
+      const cursor = userCollection.find();
+      const result = await cursor.toArray();
+      res.send(result);
+    });
+
+    app.patch("/users/:id", async (req, res) => {
+      const id = req.params.id;
+      const role = req.body.role;
+      const query = { _id: new ObjectId(id) };
+      const updatedRole = {
+        $set: {
+          role: role,
+        },
+      };
+      const result = await userCollection.updateOne(query, updatedRole);
+      res.send(result);
+    });
+
     app.post("/users", async (req, res) => {
       const user = req.body;
       user.role = "user";
