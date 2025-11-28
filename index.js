@@ -147,9 +147,13 @@ async function run() {
     app.get("/parcels", async (req, res) => {
       const query = {};
 
-      const { email } = req.query;
+      const { email, deliveryStatus } = req.query;
       if (email) {
         query.senderEmail = email;
+      }
+
+      if (deliveryStatus) {
+        query.deliveryStatus = deliveryStatus;
       }
 
       const options = { sort: { createdAt: -1 } };
@@ -235,6 +239,7 @@ async function run() {
         const update = {
           $set: {
             payment_status: "paid",
+            deliveryStatus: "pending-pickup",
             trackingId: trackingId,
           },
         };
@@ -267,8 +272,6 @@ async function run() {
 
     app.get("/payments", verifyFBToken, async (req, res) => {
       const email = req.query.email;
-      console.log("middleware email", req.access_email);
-      console.log("client email", email);
 
       const query = {};
       if (email) {
@@ -336,6 +339,7 @@ async function run() {
         const updatedInfo = {
           $set: {
             status: status,
+            workStatus: 'available',
           },
         };
         const result = await ridersCollection.updateOne(query, updatedInfo);
