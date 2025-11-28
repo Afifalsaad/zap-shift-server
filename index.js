@@ -68,6 +68,18 @@ async function run() {
     const paymentCollection = db.collection("payments");
     const ridersCollection = db.collection("riders");
 
+    // middleware for verify user role
+    const verifyRole = async (req, res, next) => {
+      const email = req.access_email;
+      const query = { email };
+      const user = await userCollection.findOne(query);
+
+      if (!user || user.role !== "admin") {
+        return res.status(403).send({ message: "Forbidden Access" });
+      }
+      next();
+    };
+
     // users related APIs
     app.get("/users", async (req, res) => {
       const cursor = userCollection.find();
@@ -84,18 +96,23 @@ async function run() {
       res.send(result.role);
     });
 
-    app.patch("/users/:id", async (req, res) => {
-      const id = req.params.id;
-      const role = req.body.role;
-      const query = { _id: new ObjectId(id) };
-      const updatedRole = {
-        $set: {
-          role: role,
-        },
-      };
-      const result = await userCollection.updateOne(query, updatedRole);
-      res.send(result);
-    });
+    app.patch(
+      "/users/:id/role",
+      verifyFBToken,
+      verifyRole,
+      async (req, res) => {
+        const id = req.params.id;
+        const role = req.body.role;
+        const query = { _id: new ObjectId(id) };
+        const updatedRole = {
+          $set: {
+            role: role,
+          },
+        };
+        const result = await userCollection.updateOne(query, updatedRole);
+        res.send(result);
+      }
+    );
 
     app.post("/users", async (req, res) => {
       const user = req.body;
@@ -239,8 +256,6 @@ async function run() {
       console.log("middleware email", req.access_email);
       console.log("client email", email);
 
-      // console.log("headers", req.headers);
-
       const query = {};
       if (email) {
         query.customerEmail = email;
@@ -296,29 +311,34 @@ async function run() {
       res.send(result);
     });
 
-    app.patch("/rider-approved/:id", verifyFBToken, async (req, res) => {
-      const status = req.body.status;
-      const id = req.params.id;
-      const query = { _id: new ObjectId(id) };
-      const updatedInfo = {
-        $set: {
-          status: status,
-        },
-      };
-      const result = await ridersCollection.updateOne(query, updatedInfo);
-
-      if (status === "approved") {
-        const email = req.body.email;
-        const query = { email };
-        const updateUser = {
+    app.patch(
+      "/rider-approved/:id",
+      verifyFBToken,
+      verifyRole,
+      async (req, res) => {
+        const status = req.body.status;
+        const id = req.params.id;
+        const query = { _id: new ObjectId(id) };
+        const updatedInfo = {
           $set: {
-            role: "rider",
+            status: status,
           },
         };
-        const userResult = await userCollection.updateOne(query, updateUser);
+        const result = await ridersCollection.updateOne(query, updatedInfo);
+
+        if (status === "approved") {
+          const email = req.body.email;
+          const query = { email };
+          const updateUser = {
+            $set: {
+              role: "rider",
+            },
+          };
+          const userResult = await userCollection.updateOne(query, updateUser);
+        }
+        res.send(result);
       }
-      res.send(result);
-    });
+    );
 
     app.delete("/riders/:id", async (req, res) => {
       const id = req.params.id;
