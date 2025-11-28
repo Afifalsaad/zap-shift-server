@@ -179,6 +179,37 @@ async function run() {
       res.send(result);
     });
 
+    app.patch("/parcels/:id", async (req, res) => {
+      const { riderId, riderName, riderEmail, riderPhoneNumber } = req.body;
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+
+      const updatedDocs = {
+        $set: {
+          deliveryStatus: "rider_assigned",
+          riderId: riderId,
+          riderName: riderName,
+          riderEmail: riderEmail,
+          riderPhoneNumber: riderPhoneNumber,
+        },
+      };
+
+      const result = await parcelsCollection.updateOne(query, updatedDocs);
+
+      // update rider information
+      const riderQuery = { _id: new ObjectId(riderId) };
+      const riderUpdatedDoc = {
+        $set: {
+          workStatus: "in_delivery",
+        },
+      };
+      const riderUpdatedResult = await ridersCollection.updateOne(
+        riderQuery,
+        riderUpdatedDoc
+      );
+      res.send(riderUpdatedResult);
+    });
+
     app.delete("/parcels/:id", async (req, res) => {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
@@ -319,11 +350,22 @@ async function run() {
 
     // Rider Related APIs
     app.get("/riders", async (req, res) => {
+      const { status, ridersDistrict, workStatus } = req.query;
+
       const query = {};
-      if (req.query.status) {
-        query.status = req.query.status;
+      if (status) {
+        query.status = status;
       }
-      const cursor = ridersCollection.find();
+
+      if (ridersDistrict) {
+        query.ridersDistrict = ridersDistrict;
+      }
+
+      if (workStatus) {
+        query.workStatus = workStatus;
+      }
+
+      const cursor = ridersCollection.find(query).sort({ createdAt: -1 });
       const result = await cursor.toArray();
       res.send(result);
     });
@@ -339,7 +381,7 @@ async function run() {
         const updatedInfo = {
           $set: {
             status: status,
-            workStatus: 'available',
+            workStatus: "available",
           },
         };
         const result = await ridersCollection.updateOne(query, updatedInfo);
