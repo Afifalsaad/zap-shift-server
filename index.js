@@ -82,7 +82,21 @@ async function run() {
 
     // users related APIs
     app.get("/users", async (req, res) => {
-      const cursor = userCollection.find();
+      const searchText = req.query.searchText;
+      const query = {};
+      if (searchText) {
+        // query.name = {$regex: searchText, $options: 'i'};
+
+        query.$or = [
+          { name: { $regex: searchText, $options: "i" } },
+          { email: { $regex: searchText, $options: "i" } },
+        ];
+      }
+
+      const cursor = userCollection
+        .find(query)
+        .sort({ createdAt: -1 })
+        .limit(4);
       const result = await cursor.toArray();
       res.send(result);
     });
