@@ -172,7 +172,8 @@ async function run() {
       }
 
       if (deliveryStatus) {
-        query.deliveryStatus = deliveryStatus;
+        // query.deliveryStatus = { $in: ["rider_assigned", "rider_arriving"] };
+        query.deliveryStatus = { $nin: ["delivered"] };
       }
 
       const cursor = parcelsCollection.find(query);
@@ -225,6 +226,54 @@ async function run() {
         riderUpdatedDoc
       );
       res.send(riderUpdatedResult);
+    });
+
+    app.patch("/parcels/:id/status", async (req, res) => {
+      const { deliveryStatus, riderId } = req.body;
+      const query = { _id: new ObjectId(req.params.id) };
+      const updatedInfo = {
+        $set: {
+          deliveryStatus: deliveryStatus,
+        },
+      };
+
+      // Update rider status
+      const riderQuery = { _id: new ObjectId(riderId) };
+      const updatedDoc = {
+        $set: {
+          workStatus: "available",
+        },
+      };
+      const riderRes = await ridersCollection.updateOne(riderQuery, updatedDoc);
+
+      const result = await parcelsCollection.updateOne(query, updatedInfo);
+      res.send(result);
+    });
+
+    app.patch("/parcels/:id/reject", async (req, res) => {
+      const { deliveryStatus, riderId } = req.body;
+      const query = { _id: new ObjectId(req.params.id) };
+      const updatedDoc = {
+        $set: {
+          deliveryStatus: deliveryStatus,
+        },
+      };
+
+      // Update rider status
+      const riderQuery = { _id: new ObjectId(riderId) };
+      const riderUpdatedDoc = {
+        $set: {
+          workStatus: "available",
+        },
+      };
+
+      const riderRes = await ridersCollection.updateOne(
+        riderQuery,
+        riderUpdatedDoc
+      );
+
+      const result = await parcelsCollection.updateOne(query, updatedDoc);
+      res.send(result);
     });
 
     app.delete("/parcels/:id", async (req, res) => {
