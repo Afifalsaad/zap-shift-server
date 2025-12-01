@@ -36,9 +36,7 @@ const verifyFBToken = async (req, res, next) => {
   try {
     const idToken = token.split(" ")[1];
     const decode = await admin.auth().verifyIdToken(idToken);
-    console.log("decode from token", decode);
     req.access_email = decode.email;
-    console.log(req.access_email);
 
     next();
   } catch (err) {
@@ -70,12 +68,23 @@ async function run() {
     const trackingsCollection = db.collection("trackings");
 
     // middleware for verify user role
-    const verifyRole = async (req, res, next) => {
+    const verifyAdmin = async (req, res, next) => {
       const email = req.access_email;
       const query = { email };
       const user = await userCollection.findOne(query);
 
       if (!user || user.role !== "admin") {
+        return res.status(403).send({ message: "Forbidden Access" });
+      }
+      next();
+    };
+
+    const verifyRider = async (req, res, next) => {
+      const email = req.access_email;
+      const query = { email };
+      const user = await userCollection.findOne(query);
+
+      if (!user || user.role !== "rider") {
         return res.status(403).send({ message: "Forbidden Access" });
       }
       next();
@@ -126,7 +135,7 @@ async function run() {
     app.patch(
       "/users/:id/role",
       verifyFBToken,
-      verifyRole,
+      verifyAdmin,
       async (req, res) => {
         const id = req.params.id;
         const role = req.body.role;
@@ -384,17 +393,15 @@ async function run() {
           trackingId: trackingId,
         };
 
-        if (session.payment_status === "paid") {
-          logTracking(trackingId, "parcel-paid");
-          const paymentResult = await paymentCollection.insertOne(payment);
-          res.send({
-            status: true,
-            modifyParcel: result,
-            trackingId: trackingId,
-            transactionId: session.payment_intent,
-            paymentInfo: paymentResult,
-          });
-        }
+        logTracking(trackingId, "parcel-paid");
+        const paymentResult = await paymentCollection.insertOne(payment);
+        return res.send({
+          status: true,
+          modifyParcel: result,
+          trackingId: trackingId,
+          transactionId: session.payment_intent,
+          paymentInfo: paymentResult,
+        });
       }
     });
 
@@ -470,7 +477,7 @@ async function run() {
     app.patch(
       "/rider-approved/:id",
       verifyFBToken,
-      verifyRole,
+      verifyAdmin,
       async (req, res) => {
         const status = req.body.status;
         const id = req.params.id;
