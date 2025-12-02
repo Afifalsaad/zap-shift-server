@@ -185,6 +185,19 @@ async function run() {
       res.send(result);
     });
 
+    app.get("/parcels/delivery-status/stats", async (req, res) => {
+      const pipeline = [
+        {
+          $group: {
+            _id: "$deliveryStatus",
+            count: { $sum: 1 },
+          },
+        },
+      ];
+      const result = await parcelsCollection.aggregate(pipeline).toArray();
+      res.send(result);
+    });
+
     app.get("/parcels/rider", async (req, res) => {
       const { riderEmail, deliveryStatus } = req.query;
       const query = {};
