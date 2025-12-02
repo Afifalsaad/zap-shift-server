@@ -9,7 +9,12 @@ const crypto = require("crypto");
 
 const admin = require("firebase-admin");
 
-const serviceAccount = require(process.env.ADMIN_SDK);
+// const serviceAccount = require(process.env.ADMIN_SDK);
+
+const decoded = Buffer.from(process.env.FB_SERVICE_KEY, "base64").toString(
+  "utf8"
+);
+const serviceAccount = JSON.parse(decoded);
 
 admin.initializeApp({
   credential: admin.credential.cert(serviceAccount),
@@ -122,8 +127,6 @@ async function run() {
       const result = await cursor.toArray();
       res.send(result);
     });
-
-    app.get("/users", async (req, res) => {});
 
     app.get("/users/:email/role", async (req, res) => {
       const email = req.params.email;
@@ -502,6 +505,39 @@ async function run() {
             riderEmail: email,
           },
         },
+        {
+          $lookup: {
+            from: "trackings",
+            localField: "trackingId",
+            foreignField: "trackingId",
+            as: "parcel-status",
+          },
+        },
+        {
+          $unwind: "$parcel-status",
+        },
+        {
+          $match: {
+            "parcel-status.status": "delivered",
+          },
+        },
+        {
+          $addFields: {
+            deliveredDate: {
+              $dateToString: {
+                format: "%Y-%m-%d",
+                date: "$parcel-status.createdAt",
+              },
+            },
+          },
+        },
+
+        {
+          $group: {
+            _id: "$deliveredDate",
+            count: { $sum: 1 },
+          },
+        },
       ];
 
       const result = await parcelsCollection.aggregate(pipeline).toArray();
@@ -564,10 +600,10 @@ async function run() {
     });
 
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
-    console.log(
-      "Pinged your deployment. You successfully connected to MongoDB!"
-    );
+    // await client.db("admin").command({ ping: 1 });
+    // console.log(
+    //   "Pinged your deployment. You successfully connected to MongoDB!"
+    // );
   } finally {
     // Ensures that the client will close when you finish/error
     //   await client.close();
