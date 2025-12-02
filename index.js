@@ -193,6 +193,13 @@ async function run() {
             count: { $sum: 1 },
           },
         },
+        {
+          $project: {
+            status: "$_id",
+            count: 1,
+            // _id: 0
+          },
+        },
       ];
       const result = await parcelsCollection.aggregate(pipeline).toArray();
       res.send(result);
@@ -484,6 +491,20 @@ async function run() {
 
       const cursor = ridersCollection.find(query).sort({ createdAt: -1 });
       const result = await cursor.toArray();
+      res.send(result);
+    });
+
+    app.get("/riders/delivery-per-day", async (req, res) => {
+      const email = req.query.email;
+      const pipeline = [
+        {
+          $match: {
+            riderEmail: email,
+          },
+        },
+      ];
+
+      const result = await parcelsCollection.aggregate(pipeline).toArray();
       res.send(result);
     });
 
